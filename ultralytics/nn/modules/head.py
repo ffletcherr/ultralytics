@@ -38,12 +38,31 @@ class Detect(nn.Module):
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch)
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
+        self.mytransformer =  nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=256,
+                nhead=8,
+                dim_feedforward=1024,
+                dropout=0.1,
+            ),
+            num_layers=4,
+        )
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         shape = x[0].shape  # BCHW
+        _x_buffer = []
         for i in range(self.nl):
-            x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i])), 1)
+            _x = x[i]
+            _shape = _x.shape[1]
+            _x = nn.functional.adaptive_avg_pool2d(_x, (1, 1)).squeeze(-1).squeeze(-1)
+            _x = _x.repeat([1,256//_shape])
+            _x1 = self.mytransformer(_x)
+            _x2 = nn.functional.adaptive_avg_pool1d(_x1, _shape).unsqueeze(-1).unsqueeze(-1)
+            _x_buffer.append(_x2)
+
+        for i in range(self.nl):
+            x[i] = torch.cat((self.cv2[i](x[i]+_x_buffer[i]), self.cv3[i](x[i]+_x_buffer[i])), 1)
         if self.training:
             return x
         elif self.dynamic or self.shape != shape:
