@@ -56,7 +56,7 @@ class Detect(nn.Module):
             _x = x[i]
             _shape = _x.shape[1]
             _x = nn.functional.adaptive_avg_pool2d(_x, (1, 1)).squeeze(-1).squeeze(-1)
-            _x = _x.repeat([1,256//_shape])
+            _x = nn.functional.upsample(_x.unsqueeze(1), [256]).squeeze(1)
             _x = _x.unsqueeze(1).repeat([1, 3, 1]).transpose(0, 1)
             _x1 = self.mytransformer(_x).mean(0)
             _x2 = nn.functional.adaptive_avg_pool1d(_x1, _shape).unsqueeze(-1).unsqueeze(-1)
