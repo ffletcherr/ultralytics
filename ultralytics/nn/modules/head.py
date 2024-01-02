@@ -52,12 +52,18 @@ class Detect(nn.Module):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         shape = x[0].shape  # BCHW
         _x_buffer = []
+        scales_buffer = []
         for i in range(self.nl):
             _x = x[i]
-            _shape = _x.shape[1]
             _x = nn.functional.adaptive_avg_pool2d(_x, (1, 1)).squeeze(-1).squeeze(-1)
-            _x = nn.functional.upsample(_x.unsqueeze(1), [256]).squeeze(1)
-            _x = _x.unsqueeze(1).repeat([1, 3, 1]).transpose(0, 1)
+            _x = nn.functional.interpolate(_x.unsqueeze(1), [256]).squeeze(1)
+            scales_buffer.append(_x)
+        stacked_scales = torch.stack(scales_buffer)
+        for i in range(self.nl):
+            _shape = x[i].shape[1]
+            lst = list(range(self.nl))
+            lst.remove(i)
+            _x = stacked_scales[[i,] + lst]
             _x1 = self.mytransformer(_x).mean(0)
             _x2 = nn.functional.adaptive_avg_pool1d(_x1, _shape).unsqueeze(-1).unsqueeze(-1)
             _x_buffer.append(_x2)
@@ -323,7 +329,7 @@ class RTDETRDecoder(nn.Module):
             grid_y, grid_x = torch.meshgrid(sy, sx, indexing='ij') if TORCH_1_10 else torch.meshgrid(sy, sx)
             grid_xy = torch.stack([grid_x, grid_y], -1)  # (h, w, 2)
 
-            valid_WH = torch.tensor([w, h], dtype=dtype, device=device)
+            valid_WH = torch.tensor([h, w], dtype=dtype, device=device)
             grid_xy = (grid_xy.unsqueeze(0) + 0.5) / valid_WH  # (1, h, w, 2)
             wh = torch.ones_like(grid_xy, dtype=dtype, device=device) * grid_size * (2.0 ** i)
             anchors.append(torch.cat([grid_xy, wh], -1).view(-1, h * w, 4))  # (1, h*w, 4)
