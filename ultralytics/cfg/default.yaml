@@ -39,6 +39,7 @@ overlap_mask: True  # (bool) masks should overlap during training (segment train
 mask_ratio: 4  # (int) mask downsample ratio (segment train only)
 # Classification
 dropout: 0.0  # (float) use dropout regularization (classify train only)
+shuffle: False # (bool) don't shuffle (added for video object detection)
 
 # Val/Test settings ----------------------------------------------------------------------------------------------------
 val: True  # (bool) validate/test during training
