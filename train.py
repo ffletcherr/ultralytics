@@ -7,6 +7,7 @@ trainer = DetectionTrainer(
         "epochs": 1,
         "data": "./ultralytics/cfg/datasets/coco8.yaml",
         "augment": False,
+        "shuffle": False,
     }
 )
 trainer.train()
