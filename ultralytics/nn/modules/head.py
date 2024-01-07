@@ -38,15 +38,19 @@ class Detect(nn.Module):
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch)
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
-        self.mytransformer =  nn.TransformerEncoder(
+        self.mytransformers =  [nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
-                d_model=256,
-                nhead=8,
-                dim_feedforward=1024,
-                dropout=0.1,
-            ),
+                d_model=64, nhead=8, dim_feedforward=1024, dropout=0.1),
             num_layers=4,
-        )
+            ), nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=128, nhead=8, dim_feedforward=1024, dropout=0.1),
+            num_layers=4,
+            ), nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=256, nhead=8, dim_feedforward=1024, dropout=0.1),
+            num_layers=4,
+            )]
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
@@ -56,9 +60,8 @@ class Detect(nn.Module):
             _x = x[i]
             _shape = _x.shape[1]
             _x = nn.functional.adaptive_avg_pool2d(_x, (1, 1)).squeeze(-1).squeeze(-1)
-            _x = nn.functional.upsample(_x.unsqueeze(1), [256]).squeeze(1)
             _x = _x.unsqueeze(1).repeat([1, 3, 1]).transpose(0, 1)
-            _x1 = self.mytransformer(_x).mean(0)
+            _x1 = self.mytransformers[i](_x).mean(0)
             _x2 = nn.functional.adaptive_avg_pool1d(_x1, _shape).unsqueeze(-1).unsqueeze(-1)
             _x_buffer.append(_x2)
 
