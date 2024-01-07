@@ -1,5 +1,5 @@
 from ultralytics.models.yolo.detect import DetectionTrainer
-
+from ultralytics import YOLO
 
 trainer = DetectionTrainer(
     overrides={
