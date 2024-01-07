@@ -38,19 +38,22 @@ class Detect(nn.Module):
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch)
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
-        self.mytransformers =  [nn.TransformerEncoder(
+        self.tt1 = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=64, nhead=8, dim_feedforward=1024, dropout=0.1),
             num_layers=4,
-            ), nn.TransformerEncoder(
+            )
+        self.tt2 = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=128, nhead=8, dim_feedforward=1024, dropout=0.1),
             num_layers=4,
-            ), nn.TransformerEncoder(
+            )
+        self.tt3 = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=256, nhead=8, dim_feedforward=1024, dropout=0.1),
             num_layers=4,
-            )]
+            )
+        self.mytransformers =  [self.tt1 , self.tt2, self.tt3]
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
