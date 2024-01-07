@@ -64,7 +64,7 @@ class Detect(nn.Module):
             _x = nn.functional.adaptive_avg_pool2d(_x, (1, 1)).squeeze(-1).squeeze(-1)
             _bs, _shape = _x.shape[:2]
             tl = 3
-            hst = torch.zeros([_bs, tl+1, _shape], device=_x.device)
+            hst = torch.zeros([_bs, tl+1, _shape], device=_x.device, dtype=_x.dtype)
             for t in range(tl):
                 tail = _x.roll(t+1, 0)
                 tail[:t+1, :] = _x[:t+1, :]
