@@ -61,10 +61,15 @@ class Detect(nn.Module):
         _x_buffer = []
         for i in range(self.nl):
             _x = x[i]
-            _shape = _x.shape[1]
             _x = nn.functional.adaptive_avg_pool2d(_x, (1, 1)).squeeze(-1).squeeze(-1)
-            _x = _x.unsqueeze(1).repeat([1, 3, 1]).transpose(0, 1)
-            _x1 = self.mytransformers[i](_x).mean(0).unsqueeze(-1).unsqueeze(-1)
+            _bs, _shape = _x.shape[:2]
+            tl = 3
+            hst = torch.zeros([_bs, tl, _shape])
+            for t in range(tl):
+                tail = _x.roll(t+1, 0)
+                tail[:t+1, :] = _x[:t+1, :]
+                hst[:, t, :] = tail
+            _x1 = self.mytransformers[i](hst.transpose(0, 1)).mean(0).unsqueeze(-1).unsqueeze(-1)
             _x_buffer.append(_x1)
 
         for i in range(self.nl):
