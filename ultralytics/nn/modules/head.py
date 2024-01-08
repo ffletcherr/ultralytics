@@ -38,42 +38,66 @@ class Detect(nn.Module):
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch)
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
-        self.tt1 = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=64, nhead=8, dim_feedforward=1024, dropout=0.1),
-            num_layers=4,
-            )
-        self.tt2 = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=128, nhead=8, dim_feedforward=1024, dropout=0.1),
-            num_layers=4,
-            )
-        self.tt3 = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=256, nhead=8, dim_feedforward=1024, dropout=0.1),
-            num_layers=4,
-            )
-        self.mytransformers =  [self.tt1 , self.tt2, self.tt3]
+        self.tl = 3
+        self.use_transformer = False
+        if self.use_transformer:
+            self.tt1 = nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(
+                    d_model=64, nhead=8, dim_feedforward=256, dropout=0.1),
+                num_layers=4,
+                )
+            self.tt2 = nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(
+                    d_model=128, nhead=8, dim_feedforward=256, dropout=0.1),
+                num_layers=4,
+                )
+            self.tt3 = nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(
+                    d_model=256, nhead=8, dim_feedforward=256, dropout=0.1),
+                num_layers=4,
+                )
+            self.mytransformers =  [self.tt1 , self.tt2, self.tt3]
+        else:
+            self.tc1 = Conv(c1=64*(self.tl+1), c2=64, k=3)
+            self.tc2 = Conv(c1=128*(self.tl+1), c2=128, k=3)
+            self.tc3 = Conv(c1=256*(self.tl+1), c2=256, k=3)
+            self.fshapes = [64, 128, 256]
+            self.myconvs =  [self.tc1 , self.tc2, self.tc3]
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         shape = x[0].shape  # BCHW
-        _x_buffer = []
-        for i in range(self.nl):
-            _x = x[i]
-            _x = nn.functional.adaptive_avg_pool2d(_x, (1, 1)).squeeze(-1).squeeze(-1)
-            _bs, _shape = _x.shape[:2]
-            tl = 3
-            hst = torch.zeros([_bs, tl+1, _shape], device=_x.device, dtype=_x.dtype)
-            for t in range(tl):
-                tail = _x.roll(t+1, 0)
-                tail[:t+1, :] = _x[:t+1, :]
-                hst[:, t+1, :] = tail
-            _x1 = self.mytransformers[i](hst.transpose(0, 1)).mean(0).unsqueeze(-1).unsqueeze(-1)
-            _x_buffer.append(_x1)
+        if self.use_transformer:
+            _x_buffer = []
+            for i in range(self.nl):
+                _x = x[i]
+                _x = nn.functional.adaptive_avg_pool2d(_x, (1, 1)).squeeze(-1).squeeze(-1)
+                _bs, _shape = _x.shape[:2]
+                hst = torch.zeros([_bs, self.tl+1, _shape], device=_x.device, dtype=_x.dtype)
+                for t in range(self.tl):
+                    tail = _x.roll(t+1, 0)
+                    tail[:t+1, :] = _x[:t+1, :]
+                    hst[:, t+1, :] = tail
+                _x1 = self.mytransformers[i](hst.transpose(0, 1)).mean(0).unsqueeze(-1).unsqueeze(-1)
+                _x_buffer.append(_x1)
 
-        for i in range(self.nl):
-            x[i] = torch.cat((self.cv2[i](x[i]+_x_buffer[i]), self.cv3[i](x[i]+_x_buffer[i])), 1)
+            for i in range(self.nl):
+                x[i] = torch.cat((self.cv2[i](x[i]+_x_buffer[i]), self.cv3[i](x[i]+_x_buffer[i])), 1)
+        else:
+            _x_buffer = []
+            for i in range(self.nl):
+                _x = x[i]
+                _bs, _shape, _h, _w = _x.shape
+                hst = torch.zeros([_bs, (self.tl+1 )* _shape, _h, _w], device=_x.device, dtype=_x.dtype)
+                for t in range(self.tl):
+                    tail = _x.roll(t+1, 0)
+                    tail[:t+1, :] = _x[:t+1, :]
+                    hst[:, t*self.fshapes[i]:(t+1)*self.fshapes[i], :] = tail
+                _x1 = self.myconvs[i](hst)
+                _x_buffer.append(_x1)
+
+            for i in range(self.nl):
+                x[i] = torch.cat((self.cv2[i](x[i]+_x_buffer[i]), self.cv3[i](x[i]+_x_buffer[i])), 1)           
         if self.training:
             return x
         elif self.dynamic or self.shape != shape:
